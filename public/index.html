@@ -330,6 +330,56 @@
             left: 100%;
         }
 
+        .cta-buttons-container {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .cta-button-secondary {
+            display: inline-block;
+            padding: 1.2rem 3rem;
+            font-family: var(--font-primary);
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--color-cyan);
+            background: transparent;
+            border: 2px solid var(--color-cyan);
+            border-radius: 50px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition-smooth);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+        }
+
+        .cta-button-secondary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.2), transparent);
+            transition: var(--transition-smooth);
+        }
+
+        .cta-button-secondary:hover {
+            transform: translateY(-5px);
+            background: rgba(0, 243, 255, 0.1);
+            box-shadow: 0 10px 50px rgba(0, 243, 255, 0.6);
+        }
+
+        .cta-button-secondary:hover::before {
+            left: 100%;
+        }
+
         /* ============================================
            SECTION COMMUNES
         ============================================ */
@@ -886,6 +936,7 @@
                 <li><a href="#stats">Résultats</a></li>
                 <li><a href="#process">Process</a></li>
                 <li><a href="#contact">Contact</a></li>
+                <li><a href="/chat/" style="color: var(--color-cyan); font-weight: 600;">🤖 Chatbot</a></li>
             </ul>
             <div class="burger" id="burger">
                 <span></span>
@@ -901,7 +952,10 @@
         <div class="hero-content">
             <h1 class="hero-title">L'Intelligence Artificielle au Service de Votre Futur</h1>
             <p class="hero-subtitle">Transformez votre entreprise avec des solutions IA sur-mesure, performantes et innovantes</p>
-            <a href="#contact" class="cta-button">Démarrer Maintenant</a>
+            <div class="cta-buttons-container">
+                <a href="#contact" class="cta-button">Démarrer Maintenant</a>
+                <a href="/chat/" class="cta-button-secondary">🤖 Essayer le Chatbot IA</a>
+            </div>
         </div>
     </section>
 
