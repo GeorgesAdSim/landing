@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RAG Gemini - Upload Documents</title>
+
+    <!-- PDF.js pour lire les PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <!-- Mammoth.js pour lire les DOCX -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -162,6 +169,82 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        .file-upload-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #667eea;
+        }
+
+        .file-upload-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-upload-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .file-upload-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-info-text {
+            color: #333;
+            font-size: 14px;
+        }
+
+        .divider {
+            text-align: center;
+            margin: 30px 0;
+            color: #999;
+            position: relative;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        .divider::before {
+            left: 0;
+        }
+
+        .divider::after {
+            right: 0;
+        }
     </style>
 </head>
 <body>
@@ -177,7 +260,27 @@
         </div>
 
         <div class="content">
+            <!-- Section Upload de Fichier -->
+            <div class="file-upload-section">
+                <h3>📎 Option 1 : Uploader un fichier</h3>
+                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+                    Formats supportés : PDF, DOCX, TXT
+                </p>
+                <input type="file" id="fileInput" accept=".pdf,.docx,.txt">
+                <label for="fileInput" class="file-upload-btn">
+                    📁 Choisir un fichier
+                </label>
+                <div id="fileInfo" class="file-info">
+                    <p class="file-info-text" id="fileInfoText"></p>
+                </div>
+            </div>
+
+            <div class="divider">OU</div>
+
+            <!-- Formulaire Manuel -->
             <form id="uploadForm">
+                <h3 style="color: #667eea; margin-bottom: 20px;">✍️ Option 2 : Saisie manuelle</h3>
+
                 <div class="form-group">
                     <label for="title">Titre du document</label>
                     <input type="text" id="title" required placeholder="Ex: Guide d'utilisation">
@@ -198,9 +301,17 @@
     </div>
 
     <script>
+        // Configuration PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
         const uploadForm = document.getElementById('uploadForm');
         const submitBtn = document.getElementById('submitBtn');
         const messageContainer = document.getElementById('messageContainer');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileInfoText = document.getElementById('fileInfoText');
+        const titleInput = document.getElementById('title');
+        const contentTextarea = document.getElementById('content');
 
         function showMessage(text, type) {
             messageContainer.innerHTML = `<div class="message ${type}">${text}</div>`;
@@ -209,11 +320,89 @@
             }, 5000);
         }
 
+        // Fonction pour extraire le texte d'un fichier TXT
+        async function extractTextFromTXT(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Erreur de lecture du fichier TXT'));
+                reader.readAsText(file);
+            });
+        }
+
+        // Fonction pour extraire le texte d'un fichier PDF
+        async function extractTextFromPDF(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = '';
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                }
+
+                return fullText;
+            } catch (error) {
+                throw new Error('Erreur lors de l\'extraction du PDF: ' + error.message);
+            }
+        }
+
+        // Fonction pour extraire le texte d'un fichier DOCX
+        async function extractTextFromDOCX(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                return result.value;
+            } catch (error) {
+                throw new Error('Erreur lors de l\'extraction du DOCX: ' + error.message);
+            }
+        }
+
+        // Gestion du changement de fichier
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileInfo.classList.add('show');
+            fileInfoText.innerHTML = `<span class="loading"></span> Extraction du texte de "${file.name}"...`;
+
+            try {
+                let extractedText = '';
+                const fileName = file.name.toLowerCase();
+
+                if (fileName.endsWith('.txt')) {
+                    extractedText = await extractTextFromTXT(file);
+                } else if (fileName.endsWith('.pdf')) {
+                    extractedText = await extractTextFromPDF(file);
+                } else if (fileName.endsWith('.docx')) {
+                    extractedText = await extractTextFromDOCX(file);
+                } else {
+                    throw new Error('Format de fichier non supporté');
+                }
+
+                // Remplir les champs du formulaire
+                const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                titleInput.value = fileNameWithoutExt;
+                contentTextarea.value = extractedText;
+
+                fileInfoText.innerHTML = `✅ Texte extrait avec succès ! (${extractedText.length} caractères)`;
+                showMessage('Fichier traité avec succès ! Vous pouvez maintenant uploader.', 'success');
+
+            } catch (error) {
+                fileInfoText.innerHTML = `❌ ${error.message}`;
+                showMessage(error.message, 'error');
+            }
+        });
+
+        // Gestion du formulaire
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const title = document.getElementById('title').value.trim();
-            const content = document.getElementById('content').value.trim();
+            const title = titleInput.value.trim();
+            const content = contentTextarea.value.trim();
 
             if (!title || !content) {
                 showMessage('Veuillez remplir tous les champs', 'error');
@@ -235,6 +424,8 @@
                 if (response.ok) {
                     showMessage(`Document "${data.title}" uploadé avec succès !`, 'success');
                     uploadForm.reset();
+                    fileInput.value = '';
+                    fileInfo.classList.remove('show');
                 } else {
                     showMessage(`Erreur: ${data.error}`, 'error');
                 }
