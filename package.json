@@ -1,0 +1,21 @@
+{
+  "name": "rag-gemini-netlify",
+  "version": "1.0.0",
+  "description": "RAG system with Gemini AI and Netlify Functions",
+  "main": "index.js",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "npm run build:functions",
+    "build:functions": "echo 'Functions ready'",
+    "deploy": "netlify deploy --prod"
+  },
+  "keywords": ["RAG", "Gemini", "AI", "Netlify"],
+  "author": "Georges",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.2.0",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+  }
+}
