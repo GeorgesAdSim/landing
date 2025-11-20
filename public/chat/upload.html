@@ -262,17 +262,18 @@
         <div class="content">
             <!-- Section Upload de Fichier -->
             <div class="file-upload-section">
-                <h3>📎 Option 1 : Uploader un fichier</h3>
+                <h3>📎 Option 1 : Uploader un ou plusieurs fichiers</h3>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-                    Formats supportés : PDF, DOCX, TXT
+                    Formats supportés : PDF, DOCX, TXT (sélection multiple possible)
                 </p>
-                <input type="file" id="fileInput" accept=".pdf,.docx,.txt">
+                <input type="file" id="fileInput" accept=".pdf,.docx,.txt" multiple>
                 <label for="fileInput" class="file-upload-btn">
-                    📁 Choisir un fichier
+                    📁 Choisir un ou plusieurs fichiers
                 </label>
                 <div id="fileInfo" class="file-info">
                     <p class="file-info-text" id="fileInfoText"></p>
                 </div>
+                <div id="filesList" style="margin-top: 15px;"></div>
             </div>
 
             <div class="divider">OU</div>
@@ -310,6 +311,7 @@
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
         const fileInfoText = document.getElementById('fileInfoText');
+        const filesList = document.getElementById('filesList');
         const titleInput = document.getElementById('title');
         const contentTextarea = document.getElementById('content');
 
@@ -361,40 +363,93 @@
             }
         }
 
-        // Gestion du changement de fichier
+        // Fonction pour extraire le texte d'un fichier selon son type
+        async function extractTextFromFile(file) {
+            const fileName = file.name.toLowerCase();
+
+            if (fileName.endsWith('.txt')) {
+                return await extractTextFromTXT(file);
+            } else if (fileName.endsWith('.pdf')) {
+                return await extractTextFromPDF(file);
+            } else if (fileName.endsWith('.docx')) {
+                return await extractTextFromDOCX(file);
+            } else {
+                throw new Error('Format de fichier non supporté');
+            }
+        }
+
+        // Fonction pour uploader un document
+        async function uploadDocument(title, content) {
+            const response = await fetch('/.netlify/functions/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Erreur d\'upload');
+            }
+
+            return data;
+        }
+
+        // Gestion du changement de fichier (multiple)
         fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
 
             fileInfo.classList.add('show');
-            fileInfoText.innerHTML = `<span class="loading"></span> Extraction du texte de "${file.name}"...`;
+            fileInfoText.innerHTML = `<span class="loading"></span> Traitement de ${files.length} fichier(s)...`;
+            filesList.innerHTML = '';
 
-            try {
-                let extractedText = '';
-                const fileName = file.name.toLowerCase();
+            let successCount = 0;
+            let errorCount = 0;
 
-                if (fileName.endsWith('.txt')) {
-                    extractedText = await extractTextFromTXT(file);
-                } else if (fileName.endsWith('.pdf')) {
-                    extractedText = await extractTextFromPDF(file);
-                } else if (fileName.endsWith('.docx')) {
-                    extractedText = await extractTextFromDOCX(file);
-                } else {
-                    throw new Error('Format de fichier non supporté');
-                }
-
-                // Remplir les champs du formulaire
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
                 const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-                titleInput.value = fileNameWithoutExt;
-                contentTextarea.value = extractedText;
 
-                fileInfoText.innerHTML = `✅ Texte extrait avec succès ! (${extractedText.length} caractères)`;
-                showMessage('Fichier traité avec succès ! Vous pouvez maintenant uploader.', 'success');
+                // Créer un élément de progression pour ce fichier
+                const fileItem = document.createElement('div');
+                fileItem.style.cssText = 'padding: 10px; margin: 5px 0; background: white; border-radius: 8px; font-size: 14px;';
+                fileItem.innerHTML = `<span class="loading"></span> ${file.name}`;
+                filesList.appendChild(fileItem);
 
-            } catch (error) {
-                fileInfoText.innerHTML = `❌ ${error.message}`;
-                showMessage(error.message, 'error');
+                try {
+                    // Extraire le texte
+                    const extractedText = await extractTextFromFile(file);
+                    fileItem.innerHTML = `⏳ ${file.name} - Upload en cours...`;
+
+                    // Uploader automatiquement
+                    await uploadDocument(fileNameWithoutExt, extractedText);
+
+                    fileItem.innerHTML = `✅ ${file.name} - Uploadé avec succès (${extractedText.length} caractères)`;
+                    fileItem.style.background = '#d4edda';
+                    successCount++;
+
+                } catch (error) {
+                    fileItem.innerHTML = `❌ ${file.name} - Erreur: ${error.message}`;
+                    fileItem.style.background = '#f8d7da';
+                    errorCount++;
+                }
             }
+
+            // Message de résumé
+            if (successCount > 0 && errorCount === 0) {
+                fileInfoText.innerHTML = `✅ Tous les fichiers ont été uploadés avec succès ! (${successCount}/${files.length})`;
+                showMessage(`${successCount} document(s) uploadé(s) avec succès !`, 'success');
+            } else if (successCount > 0 && errorCount > 0) {
+                fileInfoText.innerHTML = `⚠️ ${successCount} réussi(s), ${errorCount} échec(s)`;
+                showMessage(`${successCount} document(s) uploadé(s), ${errorCount} échec(s)`, 'error');
+            } else {
+                fileInfoText.innerHTML = `❌ Tous les uploads ont échoué`;
+                showMessage('Erreur lors de l\'upload des documents', 'error');
+            }
+
+            // Réinitialiser l'input pour permettre une nouvelle sélection
+            fileInput.value = '';
         });
 
         // Gestion du formulaire
@@ -424,8 +479,8 @@
                 if (response.ok) {
                     showMessage(`Document "${data.title}" uploadé avec succès !`, 'success');
                     uploadForm.reset();
-                    fileInput.value = '';
                     fileInfo.classList.remove('show');
+                    filesList.innerHTML = '';
                 } else {
                     showMessage(`Erreur: ${data.error}`, 'error');
                 }
