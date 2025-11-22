@@ -10,35 +10,64 @@ import pandas as pd
 import json
 import random
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import sys
+import io
+import urllib.request
 
 
 class CreditAnalysisDatasetGenerator:
     """Générateur de dataset pour l'analyse de crédit."""
 
-    def __init__(self, csv_path: str = "clients_wall.csv", num_samples: int = 100):
+    def __init__(
+        self,
+        csv_source: str = "https://docs.google.com/spreadsheets/d/1l_oH4FwD2i2TOmesTYkCaF5p4eA4RjhzEL-JNwpPsBY/export?format=csv&gid=0",
+        num_samples: int = 100
+    ):
         """
         Initialise le générateur.
 
         Args:
-            csv_path: Chemin vers le fichier CSV des clients
+            csv_source: URL Google Sheets ou chemin vers fichier CSV local
             num_samples: Nombre d'exemples à générer (défaut: 100)
         """
-        self.csv_path = Path(csv_path)
+        self.csv_source = csv_source
         self.num_samples = num_samples
         self.df = None
+        self.is_url = csv_source.startswith('http')
 
     def load_data(self) -> None:
-        """Charge les données depuis le CSV."""
-        if not self.csv_path.exists():
-            raise FileNotFoundError(
-                f"❌ Fichier {self.csv_path} non trouvé.\n"
-                f"Veuillez placer le fichier clients_wall.csv dans ce répertoire."
-            )
+        """Charge les données depuis Google Sheets ou fichier CSV local."""
+        if self.is_url:
+            print(f"📡 Chargement depuis Google Sheets...")
+            try:
+                # Utilise urllib avec un user-agent pour contourner les restrictions
+                req = urllib.request.Request(
+                    self.csv_source,
+                    headers={'User-Agent': 'Mozilla/5.0'}
+                )
+                with urllib.request.urlopen(req) as response:
+                    csv_data = response.read().decode('utf-8')
+                self.df = pd.read_csv(io.StringIO(csv_data))
+            except Exception as e:
+                raise ValueError(
+                    f"❌ Impossible de charger depuis Google Sheets.\n"
+                    f"Erreur: {e}\n\n"
+                    f"Assurez-vous que le fichier est partagé publiquement:\n"
+                    f"1. Ouvrez Google Sheets\n"
+                    f"2. Partager → Tous les utilisateurs avec le lien → Lecteur\n"
+                    f"3. Relancez le script"
+                )
+        else:
+            csv_path = Path(self.csv_source)
+            if not csv_path.exists():
+                raise FileNotFoundError(
+                    f"❌ Fichier {csv_path} non trouvé.\n"
+                    f"Veuillez placer le fichier clients_wall.csv dans ce répertoire."
+                )
+            print(f"📂 Chargement de {csv_path}...")
+            self.df = pd.read_csv(csv_path)
 
-        print(f"📂 Chargement de {self.csv_path}...")
-        self.df = pd.read_csv(self.csv_path)
         print(f"✅ {len(self.df)} clients chargés avec {len(self.df.columns)} colonnes")
 
         if len(self.df) == 0:
@@ -317,8 +346,9 @@ Ce processus garantit une évaluation complète tout en maintenant un délai rai
 
 def main():
     """Point d'entrée principal du script."""
+    # Par défaut, charge depuis Google Sheets
+    # Pour utiliser un fichier local, passez csv_source="clients_wall.csv"
     generator = CreditAnalysisDatasetGenerator(
-        csv_path="clients_wall.csv",
         num_samples=100
     )
     generator.run()
