@@ -1,0 +1,16 @@
+# Data files
+clients_wall.csv
+*.csv
+
+# Generated datasets
+training_dataset.jsonl
+*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
